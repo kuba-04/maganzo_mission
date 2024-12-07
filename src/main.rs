@@ -5,11 +5,18 @@ use rusty_engine::prelude::*;
 
 const PLAYER_SPEED: f32 = 250.0;
 const ROAD_SPEED: f32 = 400.0;
+const CELEBRATIONS: [(&str, &str); 3] = [
+    ("sfx/asante.mp3", "Asante!"),
+    ("sfx/habari2.mp3", "Habari!"),
+    ("sfx/yaay1.mp3", "Yaay!"),
+];
 
 #[derive(Resource)]
 struct GameState {
     health_amount: u8,
     lost: bool,
+    score: u8,
+    asante_timer: Option<f32>,
 }
 
 fn main() {
@@ -75,10 +82,10 @@ fn main() {
     let boy_and_girl = vec![boy, girl];
 
     for (i, path) in boy_and_girl.into_iter().enumerate() {
-        let obstacle = game.add_sprite(format!("children_obstacle{}", i), path);
+        let obstacle = game.add_sprite(format!("children{}", i), path);
         obstacle.layer = 5.0;
         obstacle.scale = 0.2;
-        obstacle.collision = false;
+        obstacle.collision = true;
         obstacle.translation.x = 800.0 + (i as f32 * 200.0) + thread_rng().gen_range(-50.0..50.0);
         obstacle.translation.y = thread_rng().gen_range(-300.0..300.0);
     }
@@ -114,14 +121,29 @@ fn main() {
     let health_message = game.add_text("health_message", "Health: 5");
     health_message.translation = Vec2::new(550.0, 320.0);
 
+    // Add score message
+    let score_message = game.add_text("score_message", "Score: 0");
+    score_message.translation = Vec2::new(550.0, 280.0);
+
     game.add_logic(game_logic);
     game.run(GameState {
         health_amount: 5,
         lost: false,
+        score: 0,
+        asante_timer: None,
     });
 }
 
 fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
+    // Handle asante text timer
+    if let Some(timer) = &mut game_state.asante_timer {
+        *timer -= engine.delta_f32;
+        if *timer <= 0.0 {
+            engine.texts.remove("asante");
+            game_state.asante_timer = None;
+        }
+    }
+
     // dont run any more game logic if the game has ended
     if game_state.lost {
         return;
@@ -181,7 +203,7 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
                 sprite.translation.y = thread_rng().gen_range(-300.0..300.0);
             }
         }
-        if sprite.label.starts_with("children_obstacle") {
+        if sprite.label.starts_with("children") {
             sprite.translation.x -= ROAD_SPEED * engine.delta_f32;
             if sprite.translation.x < -800.0 {
                 sprite.translation.x = thread_rng().gen_range(2800.0..3600.0);
@@ -190,15 +212,32 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
         }
     }
 
+    // Update messages
     let health_message = engine.texts.get_mut("health_message").unwrap();
-    for event in engine.collision_events.drain(..) {
+    health_message.value = format!("Health: {}", game_state.health_amount);
+
+    let score_message = engine.texts.get_mut("score_message").unwrap();
+    score_message.value = format!("Score: {}", game_state.score);
+
+    for event in engine.collision_events.clone().into_iter() {
         if !event.pair.either_contains("player1") || event.state.is_end() {
             continue;
         }
+
+        if event.pair.either_contains("children") {
+            game_state.score += 1;
+
+            let (sound, message) = CELEBRATIONS.choose(&mut thread_rng()).unwrap();
+            engine.audio_manager.play_sfx(sound.to_string(), 0.5);
+            let asante = engine.add_text("asante", message.to_string());
+            asante.font_size = 128.0;
+            game_state.asante_timer = Some(1.0);
+            continue;
+        }
+
         if game_state.health_amount > 0 {
             game_state.health_amount -= 1;
-            health_message.value = format!("Health: {}", game_state.health_amount);
-            engine.audio_manager.play_sfx(SfxPreset::Impact3, 0.5);
+            engine.audio_manager.play_sfx(SfxPreset::Impact1, 0.5);
         }
     }
 
