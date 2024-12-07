@@ -31,8 +31,7 @@ fn main() {
     player1.collision = true;
     player1.scale = 0.5;
 
-    game.audio_manager
-        .play_music("music/Safari_Sunshine.mp3", 0.2);
+    game.audio_manager.play_music("music/be_happy.mp3", 0.2);
 
     // savannah
     for i in 0..4 {
@@ -227,6 +226,30 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
         if event.pair.either_contains("children") {
             game_state.score += 1;
 
+            // Find which child was hit and remove it
+            let child_id = if event.pair.0 == "player1" {
+                &event.pair.1
+            } else {
+                &event.pair.0
+            };
+            engine.sprites.remove(child_id);
+
+            // Respawn the child immediately
+            let new_child = engine.add_sprite(
+                child_id.clone(),
+                if thread_rng().gen_bool(0.5) {
+                    "sprite/rolling/boy.png"
+                } else {
+                    "sprite/rolling/girl.png"
+                },
+            );
+            new_child.layer = 5.0;
+            new_child.scale = 0.2;
+            new_child.collision = true;
+            new_child.translation.x = thread_rng().gen_range(2800.0..3600.0);
+            new_child.translation.y = thread_rng().gen_range(-300.0..300.0);
+
+            // Play celebration sound and show message
             let (sound, message) = CELEBRATIONS.choose(&mut thread_rng()).unwrap();
             engine.audio_manager.play_sfx(sound.to_string(), 0.5);
             let asante = engine.add_text("asante", message.to_string());
