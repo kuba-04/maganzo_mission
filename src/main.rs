@@ -1,4 +1,5 @@
 use std::ascii::escape_default;
+use std::path::PathBuf;
 
 use rand::prelude::*;
 use rusty_engine::prelude::*;
@@ -11,12 +12,24 @@ const CELEBRATIONS: [(&str, &str); 3] = [
     ("sfx/yaay1.mp3", "Yaay!"),
 ];
 
+const INTRO_SLIDES: [&str; 7] = [
+    "sprite/img/SMX.png",
+    "sprite/img/SM0.png",
+    "sprite/img/SM1.png",
+    "sprite/img/SM3.png",
+    "sprite/img/SM4.png",
+    "sprite/img/SM5.png",
+    "sprite/img/SM6.png",
+];
+
 #[derive(Resource)]
 struct GameState {
     health_amount: u8,
     lost: bool,
     score: u8,
     asante_timer: Option<f32>,
+    intro_timer: f32,
+    current_slide: usize,
 }
 
 fn main() {
@@ -124,12 +137,31 @@ fn main() {
     let score_message = game.add_text("score_message", "Score: 0");
     score_message.translation = Vec2::new(550.0, 280.0);
 
+    // Add first slide
+    let slide = game.add_sprite("intro_slide_0", INTRO_SLIDES[0]);
+    slide.layer = 100.0;
+    slide.scale = 1.0;
+
+    // Add control buttons (using temporary sprites)
+    let up_button = game.add_sprite("button_up", "sprite/img/up.png");
+    up_button.translation = Vec2::new(-600.0, 100.0);
+    up_button.layer = 101.0;
+    up_button.scale = 0.3;
+
+    let down_button = game.add_sprite("button_down", "sprite/img/up.png");
+    down_button.translation = Vec2::new(-600.0, -100.0);
+    down_button.layer = 101.0;
+    down_button.scale = 0.3;
+    down_button.rotation = -std::f32::consts::PI / 1.0; // Rotate to point down
+
     game.add_logic(game_logic);
     game.run(GameState {
         health_amount: 5,
         lost: false,
         score: 0,
         asante_timer: None,
+        intro_timer: 1.0, // Each slide shows for 1 second
+        current_slide: 0,
     });
 }
 
@@ -143,16 +175,63 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
         }
     }
 
+    // Handle slideshow
+    if game_state.current_slide < INTRO_SLIDES.len() {
+        if engine.keyboard_state.just_pressed(KeyCode::Space)
+            || engine.keyboard_state.just_pressed(KeyCode::Return)
+            || engine.keyboard_state.just_pressed(KeyCode::Right)
+            || engine.mouse_state.just_pressed(MouseButton::Left)
+        {
+            println!("Key pressed! Current slide: {}", game_state.current_slide);
+            engine
+                .sprites
+                .remove(&format!("intro_slide_{}", game_state.current_slide));
+
+            if game_state.current_slide + 1 < INTRO_SLIDES.len() {
+                game_state.current_slide += 1;
+                println!(
+                    "Adding new slide: {}",
+                    INTRO_SLIDES[game_state.current_slide]
+                );
+                let new_slide = engine.add_sprite(
+                    format!("intro_slide_{}", game_state.current_slide),
+                    INTRO_SLIDES[game_state.current_slide],
+                );
+                new_slide.layer = 100.0;
+                new_slide.scale = 1.0;
+            } else {
+                game_state.current_slide = INTRO_SLIDES.len();
+            }
+        }
+        return;
+    }
+
     // dont run any more game logic if the game has ended
     if game_state.lost {
         return;
     }
 
     let mut direction = 0.0;
-    if engine.keyboard_state.pressed(KeyCode::Up) {
+    if engine.keyboard_state.pressed(KeyCode::Up)
+        || (engine.mouse_state.pressed(MouseButton::Left)
+            && engine
+                .mouse_state
+                .location()
+                .unwrap_or(Vec2::ZERO)
+                .distance(engine.sprites.get("button_up").unwrap().translation)
+                < 50.0)
+    {
         direction += 1.0;
     }
-    if engine.keyboard_state.pressed(KeyCode::Down) {
+    if engine.keyboard_state.pressed(KeyCode::Down)
+        || (engine.mouse_state.pressed(MouseButton::Left)
+            && engine
+                .mouse_state
+                .location()
+                .unwrap_or(Vec2::ZERO)
+                .distance(engine.sprites.get("button_down").unwrap().translation)
+                < 50.0)
+    {
         direction -= 1.0;
     }
 
@@ -168,8 +247,8 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
     for sprite in engine.sprites.values_mut() {
         if sprite.label.starts_with("roadline") {
             sprite.translation.x -= ROAD_SPEED * engine.delta_f32;
-            if sprite.translation.x < -675.0 {
-                sprite.translation.x += 1500.0;
+            if sprite.translation.x < -1200.0 {
+                sprite.translation.x += 2400.0;
             }
             if engine.keyboard_state.pressed(KeyCode::Back) {
                 sprite.translation.x = ROAD_SPEED / 2.0 * engine.delta_f32;
@@ -177,34 +256,34 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
         }
         if sprite.label.starts_with("savannah") {
             sprite.translation.x -= ROAD_SPEED * engine.delta_f32;
-            if sprite.translation.x < -800.0 {
-                sprite.translation.x += 1600.0;
+            if sprite.translation.x < -1200.0 {
+                sprite.translation.x += 2400.0;
             }
         }
         if sprite.label.starts_with("animal_obstacle") {
             sprite.translation.x -= ROAD_SPEED * engine.delta_f32;
-            if sprite.translation.x < -800.0 {
-                sprite.translation.x = thread_rng().gen_range(1800.0..2000.0);
+            if sprite.translation.x < -1200.0 {
+                sprite.translation.x = thread_rng().gen_range(1800.0..2400.0);
                 sprite.translation.y = thread_rng().gen_range(-300.0..300.0);
             }
         }
         if sprite.label.starts_with("house_obstacle") {
             sprite.translation.x -= ROAD_SPEED * engine.delta_f32;
-            if sprite.translation.x < -800.0 {
+            if sprite.translation.x < -1200.0 {
                 sprite.translation.x = thread_rng().gen_range(800.0..1600.0);
                 sprite.translation.y = thread_rng().gen_range(-300.0..300.0);
             }
         }
         if sprite.label.starts_with("plant_obstacle") {
             sprite.translation.x -= ROAD_SPEED * engine.delta_f32;
-            if sprite.translation.x < -800.0 {
+            if sprite.translation.x < -1200.0 {
                 sprite.translation.x = thread_rng().gen_range(2800.0..3600.0);
                 sprite.translation.y = thread_rng().gen_range(-300.0..300.0);
             }
         }
         if sprite.label.starts_with("children") {
             sprite.translation.x -= ROAD_SPEED * engine.delta_f32;
-            if sprite.translation.x < -800.0 {
+            if sprite.translation.x < -1200.0 {
                 sprite.translation.x = thread_rng().gen_range(2800.0..3600.0);
                 sprite.translation.y = thread_rng().gen_range(-300.0..300.0);
             }
