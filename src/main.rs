@@ -1,6 +1,3 @@
-use std::ascii::escape_default;
-use std::path::PathBuf;
-
 use rand::prelude::*;
 use rusty_engine::prelude::*;
 
@@ -28,7 +25,6 @@ struct GameState {
     lost: bool,
     score: u8,
     asante_timer: Option<f32>,
-    intro_timer: f32,
     current_slide: usize,
 }
 
@@ -132,14 +128,16 @@ fn main() {
     // health message
     let health_message = game.add_text("health_message", "Health: 5");
     health_message.translation = Vec2::new(550.0, 320.0);
+    health_message.layer = 101.0;
 
     // Add score message
     let score_message = game.add_text("score_message", "Score: 0");
     score_message.translation = Vec2::new(550.0, 280.0);
+    score_message.layer = 101.0;
 
     // Add first slide
     let slide = game.add_sprite("intro_slide_0", INTRO_SLIDES[0]);
-    slide.layer = 100.0;
+    slide.layer = 102.0;
     slide.scale = 1.0;
 
     // Add control buttons (using temporary sprites)
@@ -160,7 +158,6 @@ fn main() {
         lost: false,
         score: 0,
         asante_timer: None,
-        intro_timer: 1.0, // Each slide shows for 1 second
         current_slide: 0,
     });
 }
@@ -197,7 +194,7 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
                     format!("intro_slide_{}", game_state.current_slide),
                     INTRO_SLIDES[game_state.current_slide],
                 );
-                new_slide.layer = 100.0;
+                new_slide.layer = 102.0;
                 new_slide.scale = 1.0;
             } else {
                 game_state.current_slide = INTRO_SLIDES.len();
@@ -345,7 +342,10 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
 
     if game_state.health_amount == 0 {
         game_state.lost = true;
-        let game_over = engine.add_text("game over", "Game Over");
+        let game_over = engine.add_text(
+            "game over",
+            format!("Game Over\nScore: {}", game_state.score),
+        );
         game_over.font_size = 128.0;
         engine.audio_manager.stop_music();
         engine.audio_manager.play_sfx(SfxPreset::Jingle3, 0.5);
